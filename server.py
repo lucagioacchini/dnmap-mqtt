@@ -1,4 +1,4 @@
-import paho.mqtt.client as mqtt
+import paho.mqtt.client as paho_mqtt
 import nmap
 import time 
 import json
@@ -10,17 +10,30 @@ MQTT_PORT = 1883
 
 QUEUE = {}
 
+
 def queueUpdate(client):
     if client in QUEUE:
         pass
     else:
         QUEUE[client] = 'nmapMessage'
+    print(QUEUE)
+
+def routeDiscovery(mqtt):
+    """Send an HELLO message to the related topic to check if some clients 
+    are waiting or are operative"""
+    msg = json.dumps({
+        'id':'server',
+        'msg':'HELLO'
+    })
+    mqtt.publish('dnmap/hello', msg)
 
 
-class Client():
+
+
+class Mqtt():
     def __init__(self, clientID):
         self.clientID = clientID
-        self.cli = mqtt.Client(self.clientID) 
+        self.cli = paho_mqtt.Client(self.clientID) 
         # Register the callback
         self.cli.on_connect = self.onConnect
         self.cli.on_disconnect = self.onDisconnect
@@ -46,12 +59,14 @@ class Client():
 
     def onConnect(self, client, userdata, flags, rc):
         print("Client connected")
+        self.subscribe('dnmap/#')
+        routeDiscovery(self)
     
     def onMessage(self, client, userdata, msg):
         topic = msg.topic
         msg = json.loads(msg.payload)
         # Route Discovery
-        if 'hello' in topic:
+        if 'hello' in topic and 'CL' in msg['msg']:
             queueUpdate(msg['id'])
 
     def onDisconnect(self, client, userdata, rc):
@@ -71,9 +86,8 @@ else:
     with open(sys.argv[2], 'r') as file:
         cmd = file.read()
 
-# Start the server and subscribe it
-server = Client('server')
-server.subscribe('dnmap/#')
+# Start the server
+server = Mqtt('server')
 
 # Start the loop
 while True:

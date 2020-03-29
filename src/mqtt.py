@@ -43,8 +43,10 @@ class Client():
         print("Client connected")
     
     def onMessage(self, client, userdata, msg):
+        print(msg)
         topic = msg.topic
         msg = json.loads(msg.payload)
+        print(msg)
         # Route Discovery
         if 'hello' in topic:
             queueUpdate(msg['id'])
