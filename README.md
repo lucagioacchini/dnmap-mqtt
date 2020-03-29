@@ -1,7 +1,7 @@
 dnmap-mqtt
 
 # Protocol Overview
-## Route Discovery
+## Network Discovery
 The server send an ```S_HELLO``` message. If a client is already connected, it sends back a ```CL_HELLO```. When the server receives it, it investigate the queue. If the client is already in there, nothing is performed, otherwise the new client is added. 
 ```
    |   S_HELLO      |                |
