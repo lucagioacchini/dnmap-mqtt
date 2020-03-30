@@ -3,9 +3,10 @@ import nmap
 import time
 import json
 import uuid  
+from threading import Thread
 
 CL_ID = uuid.uuid1().hex
-MQTT_BROKER = 'localhost'
+MQTT_BROKER = 'broker.hivemq.com'
 MQTT_PORT = 1883
 
 QUEUE = {}
@@ -34,6 +35,13 @@ def sendData(mqtt):
         'msg':mqtt.res
     })
     mqtt.publish(f'dnmap/out/{CL_ID}', msg)
+
+def scanner(mqtt, msg):
+    print('Here1')
+    mqtt.res = nmap.PortScanner().scan(msg['msg'])
+    print('Here2')
+    sendDataReq(mqtt)
+    time.sleep(20)
 
 class Mqtt():
     def __init__(self, clientID):
@@ -84,9 +92,9 @@ class Mqtt():
         # client runs it and sends back the DATA_REQ when it has
         # finished
         elif 'cmd' in topic:
-            print('Scanning network')
-            self.res = nmap.PortScanner().scan(msg['msg'])
-            sendDataReq(self)
+            print(f"Scanning network: {msg['msg']}")
+            t = Thread(target=scanner, args=(self, msg))
+            t.start()
 
         # Receive DATA_REQ_ACK and send the output
         elif 'out' in topic and msg['msg'] == 'DATA_REQ_ACK':

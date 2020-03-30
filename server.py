@@ -4,8 +4,8 @@ import time
 import json
 import sys
 
-
-MQTT_BROKER = 'localhost'
+TIMEOUT = 5
+MQTT_BROKER = 'broker.hivemq.com'
 MQTT_PORT = 1883
 
 def usage():
@@ -15,14 +15,33 @@ def usage():
     exit()
 
 def queueUpdate(mqtt, client):
+    print()
+    print(mqtt.queue)
+    # If there are commands to process
     if len(mqtt.cmd) > 0:
-        mqtt.queue[client] = mqtt.cmd.pop(0)
-        sendCmd(mqtt, client, mqtt.queue[client])
+        # If the client is not in the queue, register it and sends
+        # command
+        if client not in mqtt.queue:
+            print(f'{client} not in queue')
+            mqtt.queue[client] = mqtt.cmd.pop(0)
+            sendCmd(mqtt, client, mqtt.queue[client])
+            print('Command sent')
+        # If the client is in the queue
+        else: 
+            print(f'{client} is in queue')
+            # and if it is waiting, sends command
+            if mqtt.queue[client]=='':
+                print('The client is waiting') 
+                mqtt.queue[client] = mqtt.cmd.pop(0)
+                sendCmd(mqtt, client, mqtt.queue[client])
+                print('Command sent')
+    # If the commands are finished, register the client
     else:
-        mqtt.queue[client] = ''
+        if client not in mqtt.queue:
+            mqtt.queue[client] = ''
 
 def sendCmd(mqtt, client, cmd):
-    print(f"Sending '{cmd}' to {client}")
+    #print(f"Sending '{cmd}' to {client}")
     msg = json.dumps({
         'id':'server',
         'msg':cmd
@@ -40,7 +59,7 @@ def netDiscovery(mqtt):
     mqtt.publish('dnmap/hello', msg)
 
 def sendDataReqAck(mqtt, cl_id):
-    print('sending DATA_REQ_ACK')
+    #print('sending DATA_REQ_ACK')
     msg = json.dumps({
         'id':'server',
         'msg':'DATA_REQ_ACK'
@@ -48,7 +67,7 @@ def sendDataReqAck(mqtt, cl_id):
     mqtt.publish(f'dnmap/out/{cl_id}', msg)
 
 def sendDataAck(mqtt, cl_id):
-    print('sending DATA_ACK')
+    #print('sending DATA_ACK')
     msg = json.dumps({
         'id':'server',
         'msg':'DATA_ACK'
@@ -91,7 +110,7 @@ class Mqtt():
         self.start()
 
     def start(self):
-        self.cli.connect(MQTT_BROKER, MQTT_PORT)
+        self.cli.connect(MQTT_BROKER, MQTT_PORT, keepalive=2)
         self.cli.loop_start()
 
     def stop (self):
@@ -115,32 +134,33 @@ class Mqtt():
         
         # Network Discovery
         if 'hello' in topic and 'CL' in msg['msg']:
-            print('CL_HELLO received')
+            #print('CL_HELLO received')
             queueUpdate(self, msg['id'])
         
         # The client has data to send, and sends a DATA_REQ message.
         # The server replies with a DATA_REQ_ACK
         elif 'out' in topic and msg['msg'] == 'DATA_REQ':
-            print('DATA_REQ received')
+            #print('DATA_REQ received')
             sendDataReqAck(self, msg['id'])
         
         # The client sends the scanning output to the server and it
         # sends back a DATA_ACK message
         elif 'out' in topic and 'DATA_'not in msg['msg']:
-            print(f"Data received from {msg['id']}")
+            #print(f"Data received from {msg['id']}")
+            self.queue[msg['id']] = ''
             sendDataAck(self, msg['id'])
             #
             # Process Data
             #
             # Update the queue
             queueUpdate(self, msg['id'])
-            
+
     def onDisconnect(self, client, userdata, rc):
         print('Client disconnected')
-
+        pass
     def onSubscribe(self, client, userdata, mid, granted_qos):
-        print("Client subscribed")
-    
+        #print("Client subscribed")
+        pass
     def onPublish(self, client, userdata, mid):
         pass
 
@@ -154,6 +174,16 @@ except:
 # Start the server
 server = Mqtt('server', cmds)
 
+def status(serv):
+    print(f"\nN\t{16*' '}ID{16*' '}\t\tCMD")
+    for n, key in enumerate(serv.queue):
+        if serv.queue[key] == '':
+            print(f"{n+1}\t{key}\t  WAITING  ")
+        else:
+            print(f"{n+1}\t{key}\t{serv.queue[key]}")
+
 # Start the loop
 while True:
-    pass
+    #time.sleep(TIMEOUT)
+    #status(server)
+    #server.cli.connect()
