@@ -15,30 +15,26 @@ def usage():
     exit()
 
 def queueUpdate(mqtt, client):
-    print()
-    print(mqtt.queue)
+    if client in mqtt.queue:
+        mqtt.queue[client]['timeout'] = 0
     # If there are commands to process
     if len(mqtt.cmd) > 0:
         # If the client is not in the queue, register it and sends
         # command
         if client not in mqtt.queue:
-            print(f'{client} not in queue')
-            mqtt.queue[client] = mqtt.cmd.pop(0)
-            sendCmd(mqtt, client, mqtt.queue[client])
-            print('Command sent')
+            mqtt.queue[client] = {'cmd':mqtt.cmd.pop(0),'status':'ACTIVE', 'timeout':0}
+            sendCmd(mqtt, client, mqtt.queue[client]['cmd'])
         # If the client is in the queue
         else: 
-            print(f'{client} is in queue')
             # and if it is waiting, sends command
-            if mqtt.queue[client]=='':
-                print('The client is waiting') 
-                mqtt.queue[client] = mqtt.cmd.pop(0)
-                sendCmd(mqtt, client, mqtt.queue[client])
-                print('Command sent')
+            if mqtt.queue[client]['status']=='WAITING':
+                mqtt.queue[client]['cmd'] = mqtt.cmd.pop(0)
+                mqtt.queue[client]['status'] = 'ACTIVE'
+                sendCmd(mqtt, client, mqtt.queue[client]['cmd'])
     # If the commands are finished, register the client
     else:
         if client not in mqtt.queue:
-            mqtt.queue[client] = ''
+            mqtt.queue[client] = {'cmd':'', 'status':'WAITING', 'timeout':0}
 
 def sendCmd(mqtt, client, cmd):
     #print(f"Sending '{cmd}' to {client}")
@@ -93,7 +89,16 @@ def loadCmds(fname):
     
     return cmd
 
-
+def checkStatus(mqtt):
+    for client in mqtt.queue:
+        mqtt.queue[client]['timeout']+=1
+        if mqtt.queue[client]['timeout'] >= 2:
+            if mqtt.queue[client]['cmd']!='':
+                mqtt.cmd.append(mqtt.queue[client]['cmd'])
+            mqtt.queue[client]['cmd'] = ''
+            mqtt.queue[client]['status'] = 'INACTIVE'
+    netDiscovery(mqtt)
+    
 class Mqtt():
     def __init__(self, clientID, nmap_cmd):
         self.cmd = nmap_cmd
@@ -147,7 +152,8 @@ class Mqtt():
         # sends back a DATA_ACK message
         elif 'out' in topic and 'DATA_'not in msg['msg']:
             #print(f"Data received from {msg['id']}")
-            self.queue[msg['id']] = ''
+            self.queue[msg['id']]['cmd'] = ''
+            self.queue[msg['id']]['status'] = 'WAITING'
             sendDataAck(self, msg['id'])
             #
             # Process Data
@@ -175,15 +181,14 @@ except:
 server = Mqtt('server', cmds)
 
 def status(serv):
-    print(f"\nN\t{16*' '}ID{16*' '}\t\tCMD")
+    print(f"\n\n N\t{16*' '}ID{16*' '}\tSTATUS\t\t\tCMD")
+    print(80*'-')
     for n, key in enumerate(serv.queue):
-        if serv.queue[key] == '':
-            print(f"{n+1}\t{key}\t  WAITING  ")
-        else:
-            print(f"{n+1}\t{key}\t{serv.queue[key]}")
+        print(f" {n+1}\t{key}\t{serv.queue[key]['status']}\t\t{serv.queue[key]['cmd']}")
 
 # Start the loop
 while True:
-    #time.sleep(TIMEOUT)
-    #status(server)
+    time.sleep(TIMEOUT)
+    checkStatus(server)
+    status(server)
     #server.cli.connect()

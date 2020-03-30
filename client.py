@@ -12,7 +12,6 @@ MQTT_PORT = 1883
 QUEUE = {}
 
 def sendAck(mqtt):
-    print('Sending CL_HELLO')
     msg = json.dumps({
         'id':CL_ID,
         'msg':'CL_HELLO'
@@ -20,7 +19,6 @@ def sendAck(mqtt):
     mqtt.publish('dnmap/hello', msg)
 
 def sendDataReq(mqtt):
-    print('Sending DATA_REQ')
     mqtt.done = True
     msg = json.dumps({
         'id':CL_ID,
@@ -29,7 +27,6 @@ def sendDataReq(mqtt):
     mqtt.publish(f'dnmap/out/{CL_ID}', msg)
 
 def sendData(mqtt):
-    print('Sending DATA')
     msg = json.dumps({
         'id':CL_ID,
         'msg':mqtt.res
@@ -37,9 +34,7 @@ def sendData(mqtt):
     mqtt.publish(f'dnmap/out/{CL_ID}', msg)
 
 def scanner(mqtt, msg):
-    print('Here1')
     mqtt.res = nmap.PortScanner().scan(msg['msg'])
-    print('Here2')
     sendDataReq(mqtt)
     time.sleep(20)
 
@@ -85,7 +80,6 @@ class Mqtt():
 
         # Notify the cliet activeness
         if 'hello' in topic and 'CL' not in msg['msg']:
-            print('S_HELLO received')
             sendAck(self)
         
         # When the server sends the nmap command to perform, the 
@@ -98,13 +92,11 @@ class Mqtt():
 
         # Receive DATA_REQ_ACK and send the output
         elif 'out' in topic and msg['msg'] == 'DATA_REQ_ACK':
-            print('DATA_REQ_ACK received')
             sendData(self)
         
         # When the DATA_ACK is received, the client waits for 
         # new instructions
         elif 'out' in topic and msg['msg'] == 'DATA_ACK':
-            print('DATA_ACK received')
             self.done = False
 
     def onDisconnect(self, client, userdata, rc):
