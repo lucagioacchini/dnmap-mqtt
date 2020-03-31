@@ -3,6 +3,7 @@ import nmap
 import time 
 import json
 import sys
+from influxdb import InfluxDBClient
 
 TIMEOUT = 5
 MQTT_BROKER = 'broker.hivemq.com'
@@ -17,6 +18,8 @@ def usage():
 def queueUpdate(mqtt, client):
     if client in mqtt.queue:
         mqtt.queue[client]['timeout'] = 0
+        if mqtt.queue[client]['status'] == 'INACTIVE':
+            mqtt.queue[client]['status'] = 'WAITING'
     # If there are commands to process
     if len(mqtt.cmd) > 0:
         # If the client is not in the queue, register it and sends
@@ -53,14 +56,6 @@ def netDiscovery(mqtt):
         'msg':'HELLO'
     })
     mqtt.publish('dnmap/hello', msg)
-
-def sendDataReqAck(mqtt, cl_id):
-    #print('sending DATA_REQ_ACK')
-    msg = json.dumps({
-        'id':'server',
-        'msg':'DATA_REQ_ACK'
-    })
-    mqtt.publish(f'dnmap/out/{cl_id}', msg)
 
 def sendDataAck(mqtt, cl_id):
     #print('sending DATA_ACK')
@@ -101,6 +96,7 @@ def checkStatus(mqtt):
     
 class Mqtt():
     def __init__(self, clientID, nmap_cmd):
+        self.connected = False
         self.cmd = nmap_cmd
         self.queue = {}
         self.clientID = clientID
@@ -129,6 +125,7 @@ class Mqtt():
         self.cli.subscribe(topic)
 
     def onConnect(self, client, userdata, flags, rc):
+        self.connected = True
         print("Client connected")
         self.subscribe('dnmap/#')
         netDiscovery(self)
@@ -139,14 +136,7 @@ class Mqtt():
         
         # Network Discovery
         if 'hello' in topic and 'CL' in msg['msg']:
-            #print('CL_HELLO received')
             queueUpdate(self, msg['id'])
-        
-        # The client has data to send, and sends a DATA_REQ message.
-        # The server replies with a DATA_REQ_ACK
-        elif 'out' in topic and msg['msg'] == 'DATA_REQ':
-            #print('DATA_REQ received')
-            sendDataReqAck(self, msg['id'])
         
         # The client sends the scanning output to the server and it
         # sends back a DATA_ACK message
@@ -162,8 +152,8 @@ class Mqtt():
             queueUpdate(self, msg['id'])
 
     def onDisconnect(self, client, userdata, rc):
+        self.connected = False
         print('Client disconnected')
-        pass
     def onSubscribe(self, client, userdata, mid, granted_qos):
         #print("Client subscribed")
         pass
@@ -189,6 +179,6 @@ def status(serv):
 # Start the loop
 while True:
     time.sleep(TIMEOUT)
-    checkStatus(server)
-    status(server)
-    #server.cli.connect()
+    if server.connected:
+        checkStatus(server)
+        status(server)
