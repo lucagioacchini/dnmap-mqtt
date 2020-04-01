@@ -4,6 +4,7 @@ import time
 import json
 import uuid  
 from threading import Thread
+from os import getuid
 
 DEBUG = 0
 
@@ -39,6 +40,7 @@ def scanner(mqtt, msg):
     if DEBUG == 1:
         print('Performing the scanning')
     mqtt.res = nmap.PortScanner().scan(msg['msg'])
+    mqtt.res['nmap']['client'] = mqtt.clientID
     # If the client is connected and it has not been down during
     # the scanning, send data
     if mqtt.connected or not mqtt.once_down:
@@ -141,7 +143,9 @@ class Mqtt():
         if DEBUG == 1:
             print('Message published')
 
-
+if getuid()!=0:
+    print('You need to have root privileges to run this script.')
+    exit()
 # Start the server
 client = Mqtt(CL_ID)
 

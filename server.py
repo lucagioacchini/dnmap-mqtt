@@ -24,6 +24,21 @@ class InfluxClient():
 
 
     def processData(self, data):
+        info = data['nmap']
+        stats = {
+            'cmd':info['command_line'].replace('nmap ', ''),
+            'elapsed':info['scanstats']['elapsed'],
+            'client':info['client']
+        }
+        record = [{
+            'measurement':'scaninfo',
+            'fields':stats
+        }]
+        try:
+            self.scanner.write_points(record,time_precision='u')
+        except Exception as e:
+            print(e)
+            
         data = data['scan']
         for ip in data:
             state = data[ip]['status']['state']            
@@ -35,6 +50,7 @@ class InfluxClient():
                         'measurement':'scans',
                         'fields':{
                             'ip':ip,
+                            'port':port,
                             'state':state,
                             'service':service,
                             'version':version
@@ -45,7 +61,7 @@ class InfluxClient():
                     except Exception as e:
                         print(e)
             except KeyError:
-                port = -1
+                port = '-1'
                 service = ''
                 version = ''
                 record = [{
@@ -54,7 +70,8 @@ class InfluxClient():
                         'ip':ip,
                         'state':state,
                         'service':service,
-                        'version':version
+                        'version':version,
+                        'port':port
                     }
                 }]
                 try:
