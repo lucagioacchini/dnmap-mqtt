@@ -9,6 +9,79 @@ TIMEOUT = 5
 MQTT_BROKER = 'broker.hivemq.com'
 MQTT_PORT = 1883
 
+
+class InfluxClient():
+    def __init__(self):
+        self.scanner = InfluxDBClient(
+            'localhost', 
+            8086, 
+            'root', 
+            'root',
+            'dnmapServer' 
+        )
+        if {'name': 'dnmapServer'} not in self.scanner.get_list_database():
+            self.scanner.create_database('dnmapServer')
+
+
+    def processData(self, data):
+        info = data['nmap']
+        stats = {
+            'cmd':info['command_line'].replace('nmap ', ''),
+            'elapsed':info['scanstats']['elapsed'],
+            'client':info['client']
+        }
+        record = [{
+            'measurement':'scaninfo',
+            'fields':stats
+        }]
+        try:
+            self.scanner.write_points(record,time_precision='u')
+        except Exception as e:
+            print(e)
+            
+        data = data['scan']
+        for ip in data:
+            state = data[ip]['status']['state']            
+            try:
+                for port in data[ip]['tcp']:
+                    service = data[ip]['tcp'][port]['name']
+                    version = data[ip]['tcp'][port]['version']
+                    record = [{
+                        'measurement':'scans',
+                        'fields':{
+                            'ip':ip,
+                            'port':port,
+                            'state':state,
+                            'service':service,
+                            'version':version
+                        }
+                    }]
+                    try:
+                        self.scanner.write_points(record,time_precision='u')
+                    except Exception as e:
+                        print(e)
+            except KeyError:
+                port = '-1'
+                service = ''
+                version = ''
+                record = [{
+                    'measurement':'scans',
+                    'fields':{
+                        'ip':ip,
+                        'state':state,
+                        'service':service,
+                        'version':version,
+                        'port':port
+                    }
+                }]
+                try:
+                    self.scanner.write_points(record,time_precision='u')
+                except Exception as e:
+                    print(e)
+
+            
+
+
 def usage():
     print(f"usage: {sys.argv[0]}")
     print("options:")
@@ -107,6 +180,8 @@ class Mqtt():
         self.cli.on_message = self.onMessage
         self.cli.on_publish = self.onPublish
         self.cli.on_subscribe = self.onSubscribe
+        # InfluxDB
+        self.influx = InfluxClient()
         # Start the client
         self.start()
 
@@ -146,7 +221,7 @@ class Mqtt():
             self.queue[msg['id']]['status'] = 'WAITING'
             sendDataAck(self, msg['id'])
             #
-            # Process Data
+            self.influx.processData(msg['msg'])
             #
             # Update the queue
             queueUpdate(self, msg['id'])
