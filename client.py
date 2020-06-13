@@ -25,19 +25,19 @@ import paho.mqtt.client as paho_mqtt
 import nmap
 import time
 import json
-import uuid  
+#import uuid  
 from threading import Thread
 from os import getuid
 
 DEBUG = 0
 
-CL_ID = uuid.uuid1().hex
+#CL_ID = uuid.uuid1().hex
 MQTT_BROKER = 'broker.hivemq.com'
 MQTT_PORT = 1883
 
 QUEUE = {}
 
-def sendAck(mqtt):
+def sendAck(mqtt, CL_ID):
     if DEBUG == 1:
         print('Sending CL_HELLO')
     msg = json.dumps({
@@ -46,7 +46,7 @@ def sendAck(mqtt):
     })
     mqtt.publish('dnmap/hello', msg)
 
-def sendData(mqtt):
+def sendData(mqtt, CL_ID):
     if DEBUG == 1:
         print('Sending Data')
     msg = json.dumps({
@@ -55,7 +55,7 @@ def sendData(mqtt):
     })
     mqtt.publish(f'dnmap/out/{CL_ID}', msg)
 
-def scanner(mqtt, msg):
+def scanner(mqtt, msg, CL_ID):
     # If the client has been down, the packet has been dropped, but
     # now it is up again, change the once_down status
     if mqtt.connected and mqtt.once_down:
@@ -69,7 +69,7 @@ def scanner(mqtt, msg):
     if mqtt.connected or not mqtt.once_down:
         if DEBUG == 1:
             print('Sending Data to the server')
-        sendData(mqtt)
+        sendData(mqtt, CL_ID)
         mqtt.sent = True
     # Otherwise drop the packets
     else:
@@ -117,9 +117,9 @@ class Mqtt():
         self.connected = True
         print("Client connected")
         self.subscribe('dnmap/hello')
-        self.subscribe(f'dnmap/cmd/{CL_ID}')
-        self.subscribe(f'dnmap/out/{CL_ID}')
-        sendAck(self)
+        self.subscribe(f'dnmap/cmd/{self.clientID}')
+        self.subscribe(f'dnmap/out/{self.clientID}')
+        sendAck(self, self.clientID)
     
     def onMessage(self, client, userdata, msg):
         topic = msg.topic
@@ -129,12 +129,12 @@ class Mqtt():
         if 'hello' in topic and 'CL' not in msg['msg']:
             if DEBUG == 1:
                 print('S_HELLO received')
-            sendAck(self)
+            sendAck(self, self.clientID)
             if self.sent:
                 if self.serv_down >=3:
                     if DEBUG == 1:
                         print('Server was down. Retransmitting data')
-                    sendData(self)
+                    sendData(self, self.clientID)
                 else:
                     self.serv_down += 1
                 
@@ -142,8 +142,8 @@ class Mqtt():
         # client runs it and sends back the DATA_REQ when it has
         # finished
         elif 'cmd' in topic:
-            print(f"Scanning network: {msg['msg']}")
-            t = Thread(target=scanner, args=(self, msg))
+            print(f"{self.clientID}: {msg['msg']}")
+            t = Thread(target=scanner, args=(self, msg, self.clientID))
             t.start()
         
         # When the DATA_ACK is received, the client waits for 
@@ -165,7 +165,12 @@ class Mqtt():
     def onPublish(self, client, userdata, mid):
         if DEBUG == 1:
             print('Message published')
+    
+    def run(self):
+        while True:
+            pass
 
+"""
 if getuid()!=0:
     print('You need to have root privileges to run this script.')
     exit()
@@ -175,3 +180,4 @@ client = Mqtt(CL_ID)
 # Start the loop
 while True:
     pass
+"""

@@ -1,3 +1,5 @@
 paho-mqtt
 python-nmap
 influxdb
+psutil
+speedtest-cli
