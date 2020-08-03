@@ -48,3 +48,6 @@ When a clent has performed a nmap scan, it sends the data and a ```DATA_ACK``` i
    +                +                +
  server           broker           client
 ```
+
+##
+(c) 2020, Luca Gioacchini
