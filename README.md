@@ -1,4 +1,4 @@
-# DNMAP-MQTT
+# Distributed Nmap Scanning System Over MQTT
 This is a simple distributed nmap scanning system through mqtt.<br>
 The master node, or server, reads the nmap commands from a .txt files. If one or more clients are waiting for commands, the master node sends a command to each node.<br>
 When a client completes the network scanning, it sends back to the master the JSON output which is processed and updated to a local InfluxDB database. 
